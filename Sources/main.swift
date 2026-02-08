@@ -1,23 +1,7 @@
 import Cocoa
 import AXSwift
 
-var initialWindowPosition: CGPoint = .zero
-var initialMousePosition: CGPoint = .zero
-var initialWindowSize: CGSize = .zero
-
-var pendingWindowPosition: CGPoint?
-var pendingWindowSize: CGSize?
-
-var targetWindow: UIElement? = nil
-
-var isDragging = false
-var isResizing = false
-
-// TODO: ???
-var resL = false
-var resT = false
-
-print("Started MacDrag.")
+var dragInfo: DragInfo?
 
 let events: [CGEventType] = [
 	.leftMouseDown,
@@ -40,97 +24,100 @@ let eventTap = CGEvent.tapCreate(
 	eventsOfInterest: eventMask,
 	callback: { _, type, event, _ in
 		if !event.flags.contains(.maskAlternate) {
-			isDragging = false
-			isResizing = false
-			
-			if targetWindow != nil {
-				targetWindow = nil
-			}
+			dragInfo = nil
 			
 			return .passUnretained(event)
 		}
 		
+		// tapping control while dragging focuses window
 		if type == .flagsChanged,
-		   isDragging || isResizing,
-		   event.flags.contains(.maskControl)
+		   event.flags.contains(.maskControl),
+			let dragInfo
 		{
-				if let targetWindow {
-					focusApp(of: targetWindow)
-				}
-				
-				return .passUnretained(event)
+			dragInfo.targetWindow.focus()
+			return .passUnretained(event)
 		}
 		
 		let mousePosition = event.location
 		
-		// Mouse Down
+		// mouse down
+		// TODO: still let option-click hide window ?
 		if type == .leftMouseDown || type == .rightMouseDown,
-		   let element = try? UIElement.at(mousePosition),
+		   let element = try? UIElement(at: mousePosition),
 		   let window = element.window()
 		{
-			print("clicked on window")
+			// TODO: should ignore errors?
+			let initialWindowPosition = (try? window.position()) ?? .zero
+			let initialWindowSize = (try? window.size()) ?? .zero
 			
-			targetWindow = window
-			initialMousePosition = mousePosition
-			
-			initialWindowPosition = (try? window.position()) ?? .zero
-			initialWindowSize = (try? window.size()) ?? .zero
-			
-			print(initialWindowPosition, initialWindowSize)
-			
-			if type == .leftMouseDown {
-				isDragging = true
+			let corner: Corner? = if type == .rightMouseDown {
+				Corner(
+					closestTo: mousePosition - initialWindowPosition,
+					in: initialWindowSize
+				)
 			} else {
-				isResizing = true
-				
-				resL = mousePosition.x < initialWindowPosition.x + initialWindowSize.width / 2
-				resT = mousePosition.y < initialWindowPosition.y + initialWindowSize.height / 2
+				nil
 			}
 			
+			dragInfo = DragInfo(
+				initialWindowPosition: initialWindowPosition,
+				initialMousePosition: mousePosition,
+				initialWindowSize: initialWindowSize,
+				targetWindow: window,
+				resizingFrom: corner
+			)
+			
+			// eat the click
 			return nil
 		}
 		
-		// Dragging / Resizing
-		if let targetWindow, isDragging || isResizing {
-			let dx = mousePosition.x - initialMousePosition.x
-			let dy = mousePosition.y - initialMousePosition.y
+		// dragging/resizing
+		if let dragInfo {
+			let mousePositionChange = mousePosition - dragInfo.initialMousePosition
 			
-			if isDragging {
-				pendingWindowPosition = CGPoint(
-					x: initialWindowPosition.x + dx,
-					y: initialWindowPosition.y + dy
+			var newWindowPosition: CGPoint
+			
+			if let resizingFrom = dragInfo.resizingFrom {
+				let xChange: CGFloat = resizingFrom.left ? mousePositionChange.x : 0
+				let yChange: CGFloat = resizingFrom.top ? mousePositionChange.y : 0
+				
+				let widthChange: CGFloat = if resizingFrom.left {
+					-mousePositionChange.x
+				} else {
+					mousePositionChange.x
+				}
+				
+				let heighChange: CGFloat = if resizingFrom.top {
+					-mousePositionChange.y
+				} else {
+					mousePositionChange.y
+				}
+				
+				let newWindowSize = CGSize(
+					width: dragInfo.initialWindowSize.width + widthChange,
+					height: dragInfo.initialWindowSize.height + heighChange
+				)
+				
+				try? dragInfo.targetWindow.setAttribute(.size, value: newWindowSize)
+				
+				newWindowPosition = dragInfo.initialWindowPosition + CGPoint(
+					x: xChange,
+					y: yChange
 				)
 			} else {
-				// TODO: clean all this up
-				let min: CGFloat = 100
-				
-				let width = max(min, initialWindowSize.width + (resL ? -dx : dx))
-				let height = max(min, initialWindowSize.height + (resT ? -dy : dy))
-				
-				pendingWindowSize = CGSize(width: width, height: height)
-				
-				pendingWindowPosition = CGPoint(
-					x: initialWindowPosition.x + (resL ? (width == min ? initialWindowSize.width - min : dx) : 0),
-					y: initialWindowPosition.y + (resT ? (height == min ? initialWindowSize.height - min : dy) : 0)
-				)
+				newWindowPosition = dragInfo.initialWindowPosition + mousePositionChange
 			}
 			
-			updateWindowAfter16ms(targetWindow)
+			try? dragInfo.targetWindow.setAttribute(.position, value: newWindowPosition)
+			
 			if type != .leftMouseUp, type != .rightMouseUp {
 				return nil
 			}
 		}
 		
-		// Mouse Up
-		if (type == .leftMouseUp && isDragging) || (type == .rightMouseUp && isResizing) {
-			isDragging = false
-			isResizing = false
-			
-			updateTimer?.cancel()
-			updateTimer = nil
-			
-			targetWindow = nil
-			
+		// mouse up
+		if type == .leftMouseUp || type == .rightMouseUp, dragInfo != nil {
+			dragInfo = nil
 			return nil
 		}
 		
