@@ -5,9 +5,6 @@ let edgeSnappingDistance: CGFloat = 50
 
 var dragInfo: DragInfo?
 
-// use the visible frame to snap against the dock
-let screenBounds = NSScreen.main!.visibleFrame
-
 let events: [CGEventType] = [
 	.leftMouseDown,
 	.leftMouseUp,
@@ -139,7 +136,7 @@ let eventTap = CGEvent.tapCreate(
 				if distancePastLeftEdge > edgeSnappingDistance {
 					newWindowPosition.x += edgeSnappingDistance
 				} else if distancePastLeftEdge > 0 {
-					newWindowPosition.x = 0
+					newWindowPosition.x = screenBounds.minX
 				}
 				
 				let windowRightEdgeX = newWindowPosition.x + dragInfo.initialWindowSize.width
