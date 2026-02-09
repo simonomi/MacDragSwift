@@ -23,16 +23,15 @@ let eventTap = CGEvent.tapCreate(
 	options: .defaultTap,
 	eventsOfInterest: eventMask,
 	callback: { _, type, event, _ in
-		if !event.flags.contains(.maskAlternate) {
+		if !event.flags.contains(.maskControl) {
 			dragInfo = nil
-			
 			return .passUnretained(event)
 		}
 		
-		// tapping control while dragging focuses window
+		// tap alt while dragging to focus window
 		if type == .flagsChanged,
-		   event.flags.contains(.maskControl),
-			let dragInfo
+		   event.flags.contains(.maskAlternate),
+		   let dragInfo
 		{
 			dragInfo.targetWindow.focus()
 			return .passUnretained(event)
@@ -41,14 +40,15 @@ let eventTap = CGEvent.tapCreate(
 		let mousePosition = event.location
 		
 		// mouse down
-		// TODO: still let option-click hide window ?
 		if type == .leftMouseDown || type == .rightMouseDown,
 		   let element = try? UIElement(at: mousePosition),
 		   let window = element.window()
 		{
-			// TODO: should ignore errors?
-			let initialWindowPosition = (try? window.position()) ?? .zero
-			let initialWindowSize = (try? window.size()) ?? .zero
+			guard let initialWindowPosition = try? window.position(),
+				  let initialWindowSize = try? window.size()
+			else {
+				return .passUnretained(event)
+			}
 			
 			let corner: Corner? = if type == .rightMouseDown {
 				Corner(
