@@ -122,7 +122,7 @@ let eventTap = CGEvent.tapCreate(
 					height: dragInfo.initialWindowSize.height + heighChange
 				)
 				
-				try? dragInfo.targetWindow.setAttribute(.size, value: newWindowSize)
+				try! dragInfo.targetWindow.setAttribute(.size, value: newWindowSize)
 				
 				newWindowPosition = dragInfo.initialWindowPosition + CGPoint(
 					x: xChange,
@@ -158,7 +158,7 @@ let eventTap = CGEvent.tapCreate(
 				}
 			}
 			
-			try? dragInfo.targetWindow.setAttribute(.position, value: newWindowPosition)
+			try! dragInfo.targetWindow.setAttribute(.position, value: newWindowPosition)
 			
 			if type != .leftMouseUp, type != .rightMouseUp {
 				return nil
