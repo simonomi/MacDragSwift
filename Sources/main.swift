@@ -176,10 +176,8 @@ let eventTap = CGEvent.tapCreate(
 	userInfo: nil
 )
 
-var standardError: FileHandle = .standardError
-
 guard let eventTap else {
-	print("Failed to create event tap. is Accessibility enabled?", to: &standardError)
+	print("Failed to create event tap. is Accessibility enabled?", to: &.standardError)
 	exit(1)
 }
 
